@@ -38,12 +38,12 @@ static t_state get_conclusion(const t_result *res, int scan_flags) {
 }
 
 static void lookup_service(t_result *res, int scan_flags) {
-    const char *proto = (scan_flags == SCAN_UDP) ? "udp" : "tcp";
+    const char *proto = (scan_flags & ~SCAN_UDP) ? "tcp" : "udp";
     struct servent *se = getservbyport(htons(res->port), proto);
     if (se)
         strncpy(res->service, se->s_name, sizeof(res->service) - 1);
     else
-        strncpy(res->service, "unassigned", sizeof(res->service) - 1);
+        strncpy(res->service, "Unassigned", sizeof(res->service) - 1);
     res->service[sizeof(res->service) - 1] = '\0';
 }
 
@@ -64,15 +64,12 @@ static void build_results_str(const t_result *res, int scan_flags,
 }
 
 void print_scan_header(t_options *opts, const char *ip) {
-    const char *scan_names[SCAN_COUNT] = {
-        "SYN", "NULL", "FIN", "XMAS", "ACK", "UDP"
-    };
     char scans[128] = "";
     for (int i = 0; i < SCAN_COUNT; i++) {
         if (opts->scan_flags & g_scan_bits[i]) {
             if (scans[0])
                 strncat(scans, " ", sizeof(scans) - strlen(scans) - 1);
-            strncat(scans, scan_names[i], sizeof(scans) - strlen(scans) - 1);
+            strncat(scans, g_scan_names[i], sizeof(scans) - strlen(scans) - 1);
         }
     }
     printf("\nScan Configurations\n");

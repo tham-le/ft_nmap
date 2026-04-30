@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
 
 #define MAX_IPS      256
 #define MAX_PORTS    1024
@@ -40,6 +41,17 @@ typedef struct s_result {
     t_state  states[SCAN_COUNT];
     char     service[64];
 } t_result;
+
+typedef struct s_thread_arg {
+    struct sockaddr_in  dest;
+    char                dest_ip[INET_ADDRSTRLEN];
+    uint16_t           *ports;
+    int                 port_count;
+    int                 scan_flags;
+    t_result           *results;
+    int                 thread_id;
+    pthread_mutex_t    *mutex;
+} t_thread_arg;
 
 typedef struct s_options {
     char     *ips[MAX_IPS];

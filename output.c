@@ -1,14 +1,6 @@
 #include "ft_nmap.h"
 #include <netdb.h>
 
-static const char *g_scan_names[SCAN_COUNT] = {
-    "SYN", "NULL", "ACK", "FIN", "XMAS", "UDP",
-};
-
-static const int g_scan_bits[SCAN_COUNT] = {
-    SCAN_SYN, SCAN_NULL, SCAN_ACK, SCAN_FIN, SCAN_XMAS, SCAN_UDP,
-};
-
 static const char *state_str(t_state s) {
     switch (s) {
     case STATE_OPEN:          return "Open";
@@ -26,13 +18,13 @@ static const char *state_str(t_state s) {
  */
 static t_state get_conclusion(const t_result *res, int scan_flags) {
     for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_bits[i]) && res->states[i] == STATE_OPEN)
+        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_OPEN)
             return STATE_OPEN;
     for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_bits[i]) && res->states[i] == STATE_CLOSED)
+        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_CLOSED)
             return STATE_CLOSED;
     for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_bits[i]) && res->states[i] == STATE_UNFILTERED)
+        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_UNFILTERED)
             return STATE_UNFILTERED;
     return STATE_FILTERED;
 }
@@ -51,11 +43,11 @@ static void build_results_str(const t_result *res, int scan_flags,
                                char *buf, size_t size) {
     buf[0] = '\0';
     for (int i = 0; i < SCAN_COUNT; i++) {
-        if (!(scan_flags & g_scan_bits[i]))
+        if (!(scan_flags & g_scan_types[i].bit))
             continue;
         char tmp[64];
         snprintf(tmp, sizeof(tmp), "%s(%s) ",
-                 g_scan_names[i], state_str(res->states[i]));
+                 g_scan_types[i].name, state_str(res->states[i]));
         strncat(buf, tmp, size - strlen(buf) - 1);
     }
     size_t len = strlen(buf);
@@ -66,10 +58,10 @@ static void build_results_str(const t_result *res, int scan_flags,
 void print_scan_header(t_options *opts, const char *ip) {
     char scans[128] = "";
     for (int i = 0; i < SCAN_COUNT; i++) {
-        if (opts->scan_flags & g_scan_bits[i]) {
+        if (opts->scan_flags & g_scan_types[i].bit) {
             if (scans[0])
                 strncat(scans, " ", sizeof(scans) - strlen(scans) - 1);
-            strncat(scans, g_scan_names[i], sizeof(scans) - strlen(scans) - 1);
+            strncat(scans, g_scan_types[i].name, sizeof(scans) - strlen(scans) - 1);
         }
     }
     printf("\nScan Configurations\n");

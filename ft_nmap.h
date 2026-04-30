@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
+#include <pcap.h>
 
 #define MAX_IPS      256
 #define MAX_PORTS    1024
@@ -36,6 +37,14 @@ typedef enum e_state {
     STATE_OPEN_FILTERED,
 } t_state;
 
+typedef struct s_scan_type {
+    int         bit;
+    uint8_t     tcp_flags;
+    const char *name;
+} t_scan_type;
+
+extern const t_scan_type g_scan_types[SCAN_COUNT];
+
 typedef struct s_result {
     uint16_t port;
     t_state  states[SCAN_COUNT];
@@ -50,7 +59,6 @@ typedef struct s_thread_arg {
     int                 scan_flags;
     t_result           *results;
     int                 thread_id;
-    pthread_mutex_t    *mutex;
 } t_thread_arg;
 
 typedef struct s_options {
@@ -63,33 +71,33 @@ typedef struct s_options {
 } t_options;
 
 /* args.c */
-void     parse_arguments(int argc, char **argv, t_options *opts);
+void      parse_arguments(int argc, char **argv, t_options *opts);
 
 /* utils.c */
-uint16_t checksum(const void *data, int len);
-int      resolve_target(const char *host, struct sockaddr_in *out);
+uint16_t  checksum(const void *data, size_t len);
+int       resolve_target(const char *host, struct sockaddr_in *out);
+uint32_t  get_local_ip(struct sockaddr_in *dest);
 
 /* pcap_utils.c */
-#include <pcap.h>
-pcap_t  *open_pcap(const char *dest_ip, uint32_t local_ip,
-                   uint16_t sp_min, uint16_t sp_max);
+pcap_t   *open_pcap(const char *dest_ip, uint32_t local_ip,
+                    uint16_t sp_min, uint16_t sp_max);
 
 /* tcp.c */
-t_state  tcp_scan(struct sockaddr_in *dest, uint16_t port,
-                  uint16_t src_port, uint32_t src_ip,
-                  uint8_t tcp_flags, int scan_bit,
-                  int raw_sock, pcap_t *pcap);
+t_state   tcp_scan(struct sockaddr_in *dest, uint16_t port,
+                   uint16_t src_port, uint32_t src_ip,
+                   uint8_t tcp_flags, int scan_bit,
+                   int raw_sock, pcap_t *pcap);
 
 /* udp.c */
-t_state  udp_scan(struct sockaddr_in *dest, uint16_t port);
+t_state   udp_scan(struct sockaddr_in *dest, uint16_t port);
 
 /* scan.c */
-void     run_scan(t_options *opts, struct sockaddr_in *dest,
-                  const char *dest_ip, t_result *results);
+void      run_scan(t_options *opts, struct sockaddr_in *dest,
+                   const char *dest_ip, t_result *results);
 
 /* output.c */
-void     print_scan_header(t_options *opts, const char *ip);
-void     print_results(t_result *results, int count, const char *ip,
-                       int scan_flags, double elapsed);
+void      print_scan_header(t_options *opts, const char *ip);
+void      print_results(t_result *results, int count, const char *ip,
+                        int scan_flags, double elapsed);
 
 #endif

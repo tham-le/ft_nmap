@@ -2,7 +2,7 @@ NAME   = ft_nmap
 CC     = cc
 CFLAGS = -Wall -Wextra -Werror
 
-SRC    = main.c args.c utils.c pcap_utils.c tcp.c udp.c scan.c output.c
+SRC    = main.c args.c utils.c pcap_utils.c tcp.c udp.c scan.c scan_types.c output.c
 OBJ    = $(SRC:.c=.o)
 LIBS   = -lpcap -lpthread -lm
 

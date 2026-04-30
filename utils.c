@@ -3,7 +3,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-uint16_t checksum(const void *data, int len) {
+uint16_t checksum(const void *data, size_t len) {
     const uint16_t *ptr = data;
     uint32_t        sum = 0;
     while (len > 1) {
@@ -29,4 +29,18 @@ int resolve_target(const char *host, struct sockaddr_in *out) {
     *out = *(struct sockaddr_in *)res->ai_addr;
     freeaddrinfo(res);
     return 0;
+}
+
+uint32_t get_local_ip(struct sockaddr_in *dest) {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
+        return 0;
+    struct sockaddr_in tmp = *dest;
+    tmp.sin_port = htons(80);
+    connect(sock, (struct sockaddr *)&tmp, sizeof(tmp));
+    struct sockaddr_in local;
+    socklen_t len = sizeof(local);
+    getsockname(sock, (struct sockaddr *)&local, &len);
+    close(sock);
+    return local.sin_addr.s_addr;
 }

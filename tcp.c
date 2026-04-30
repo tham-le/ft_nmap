@@ -6,7 +6,10 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
-#include <pcap.h>
+
+/* ICMP Dest Unreach embeds at least 8 bytes of the original datagram,
+   enough to read sport (2) + dport (2) + seq (4) from the TCP header */
+#define ICMP_EMBEDDED_HDR_MIN 8
 
 struct pseudo_hdr {
     uint32_t src;
@@ -127,12 +130,15 @@ static t_state classify_tcp_pkt(const u_char *pkt, int pkt_len,
             return STATE_UNKNOWN;
 
         int orig_ihl = orig_ip->ihl * 4;
-        if (pkt_len < orig_off + orig_ihl + 8)  /* 8 bytes covers sport+dport */
+        if (pkt_len < orig_off + orig_ihl + ICMP_EMBEDDED_HDR_MIN)
             return STATE_UNKNOWN;
 
         const uint8_t *orig_tcp = (const uint8_t *)(pkt + orig_off + orig_ihl);
-        uint16_t orig_sport = ntohs(*(uint16_t *)(orig_tcp + 0));
-        uint16_t orig_dport = ntohs(*(uint16_t *)(orig_tcp + 2));
+        uint16_t orig_sport, orig_dport;
+        memcpy(&orig_sport, orig_tcp + 0, sizeof(orig_sport));
+        memcpy(&orig_dport, orig_tcp + 2, sizeof(orig_dport));
+        orig_sport = ntohs(orig_sport);
+        orig_dport = ntohs(orig_dport);
         if (orig_sport != src_port || orig_dport != target_port)
             return STATE_UNKNOWN;
 

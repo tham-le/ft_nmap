@@ -107,15 +107,36 @@ static t_state classify_tcp_pkt(const u_char *pkt, int pkt_len,
     }
 
     if (ip->protocol == IPPROTO_ICMP) {
-        if (pkt_len < (int)(sizeof(struct ether_header) + ihl
-                            + (int)sizeof(struct icmphdr)))
+        int base = (int)sizeof(struct ether_header) + ihl;
+        if (pkt_len < base + (int)sizeof(struct icmphdr))
             return STATE_UNKNOWN;
 
         const struct icmphdr *icmp =
             (struct icmphdr *)((const char *)ip + ihl);
 
-        if (icmp->type == ICMP_DEST_UNREACH)
-            return STATE_FILTERED;
+        if (icmp->type != ICMP_DEST_UNREACH)
+            return STATE_UNKNOWN;
+
+        /* verify the embedded original IP+TCP header belongs to our probe */
+        int orig_off = base + (int)sizeof(struct icmphdr);
+        if (pkt_len < orig_off + (int)sizeof(struct iphdr))
+            return STATE_UNKNOWN;
+
+        const struct iphdr *orig_ip = (struct iphdr *)(pkt + orig_off);
+        if (orig_ip->protocol != IPPROTO_TCP)
+            return STATE_UNKNOWN;
+
+        int orig_ihl = orig_ip->ihl * 4;
+        if (pkt_len < orig_off + orig_ihl + 8)  /* 8 bytes covers sport+dport */
+            return STATE_UNKNOWN;
+
+        const uint8_t *orig_tcp = (const uint8_t *)(pkt + orig_off + orig_ihl);
+        uint16_t orig_sport = ntohs(*(uint16_t *)(orig_tcp + 0));
+        uint16_t orig_dport = ntohs(*(uint16_t *)(orig_tcp + 2));
+        if (orig_sport != src_port || orig_dport != target_port)
+            return STATE_UNKNOWN;
+
+        return STATE_FILTERED;
     }
 
     return STATE_UNKNOWN;
@@ -124,7 +145,7 @@ static t_state classify_tcp_pkt(const u_char *pkt, int pkt_len,
 t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
                  uint16_t src_port, uint32_t src_ip,
                  uint8_t tcp_flags, int scan_bit,
-                 int raw_sock, void *pcap_handle) {
+                 int raw_sock, pcap_t *pcap) {
     char pkt[sizeof(struct iphdr) + sizeof(struct tcphdr)];
     memset(pkt, 0, sizeof(pkt));
     build_packet(pkt, src_ip, dest->sin_addr.s_addr,
@@ -134,10 +155,8 @@ t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
                (struct sockaddr *)dest, sizeof(*dest)) < 0)
         return STATE_FILTERED;
 
-    if (!pcap_handle)
+    if (!pcap)
         return STATE_FILTERED;
-
-    pcap_t *pcap = pcap_handle;
 
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
@@ -150,12 +169,12 @@ t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
             break;
 
         struct pcap_pkthdr *hdr;
-        const u_char       *raw;
-        int ret = pcap_next_ex(pcap, &hdr, &raw);
+        const u_char       *data;
+        int ret = pcap_next_ex(pcap, &hdr, &data);
         if (ret <= 0)
             continue;
 
-        t_state s = classify_tcp_pkt(raw, (int)hdr->caplen,
+        t_state s = classify_tcp_pkt(data, (int)hdr->caplen,
                                      port, src_port, scan_bit);
         if (s != STATE_UNKNOWN)
             return s;

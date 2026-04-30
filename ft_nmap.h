@@ -78,7 +78,7 @@ pcap_t  *open_pcap(const char *dest_ip, uint32_t local_ip,
 t_state  tcp_scan(struct sockaddr_in *dest, uint16_t port,
                   uint16_t src_port, uint32_t src_ip,
                   uint8_t tcp_flags, int scan_bit,
-                  int raw_sock, void *pcap);
+                  int raw_sock, pcap_t *pcap);
 
 /* udp.c */
 t_state  udp_scan(struct sockaddr_in *dest, uint16_t port);

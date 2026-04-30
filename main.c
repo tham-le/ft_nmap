@@ -12,6 +12,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    srand((unsigned)time(NULL) ^ (unsigned)getpid());
+
     t_options opts;
     memset(&opts, 0, sizeof(opts));
     parse_arguments(argc, argv, &opts);

@@ -64,6 +64,11 @@ static void *thread_worker(void *arg) {
 
     /* get local IP first so pcap opens on the correct interface */
     uint32_t src_ip = get_local_ip(&a->dest);
+    if (src_ip == 0) {
+        fprintf(stderr, "ft_nmap: failed to determine local IP\n");
+        close(raw_sock);
+        return NULL;
+    }
 
     pcap_t *pcap = NULL;
     if (a->scan_flags & (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_FIN | SCAN_XMAS)) {

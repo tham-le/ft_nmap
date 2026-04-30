@@ -33,4 +33,8 @@ typedef struct s_options {
 /* args.c */
 void parse_arguments(int argc, char **argv, t_options *opts);
 
+/* utils.c */
+uint16_t  checksum(const void *data, int len);
+int       resolve_target(const char *host, struct sockaddr_in *out);
+
 #endif

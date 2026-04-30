@@ -11,11 +11,20 @@ static void parse_ports(const char *spec, t_options *opts) {
         if (dash) {
             int lo = atoi(tok);
             int hi = atoi(dash + 1);
+            if (lo < 1 || hi > 65535 || lo > hi) {
+                fprintf(stderr, "ft_nmap: invalid port range: %s\n", tok);
+                exit(1);
+            }
             for (int p = lo; p <= hi && opts->port_count < MAX_PORTS; p++)
                 opts->ports[opts->port_count++] = (uint16_t)p;
         } else {
+            int p = atoi(tok);
+            if (p < 1 || p > 65535) {
+                fprintf(stderr, "ft_nmap: invalid port: %s\n", tok);
+                exit(1);
+            }
             if (opts->port_count < MAX_PORTS)
-                opts->ports[opts->port_count++] = (uint16_t)atoi(tok);
+                opts->ports[opts->port_count++] = (uint16_t)p;
         }
         tok = strtok(NULL, ",");
     }

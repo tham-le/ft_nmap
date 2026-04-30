@@ -62,13 +62,14 @@ static void *thread_worker(void *arg) {
     uint16_t sp_min = (uint16_t)(SRC_PORT_BASE + a->thread_id * SCAN_COUNT);
     uint16_t sp_max = (uint16_t)(sp_min + SCAN_COUNT - 2);
 
+    /* get local IP first so pcap opens on the correct interface */
+    uint32_t src_ip = get_local_ip(&a->dest);
+
     pcap_t *pcap = NULL;
     if (a->scan_flags & (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_FIN | SCAN_XMAS)) {
-        pcap = open_pcap(a->dest_ip, sp_min, sp_max);
+        pcap = open_pcap(a->dest_ip, src_ip, sp_min, sp_max);
         if (!pcap) { close(raw_sock); return NULL; }
     }
-
-    uint32_t src_ip = get_local_ip(&a->dest);
 
     for (int i = 0; i < a->port_count; i++) {
         t_result res;

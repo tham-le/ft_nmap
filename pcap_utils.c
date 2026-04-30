@@ -1,25 +1,46 @@
 #include "ft_nmap.h"
 #include <pcap.h>
+#include <arpa/inet.h>
 
-static const char *get_default_iface(void) {
+/* find the interface whose address matches local_ip */
+static const char *get_iface_for_ip(uint32_t local_ip) {
     pcap_if_t *devs;
     char errbuf[PCAP_ERRBUF_SIZE];
     if (pcap_findalldevs(&devs, errbuf) < 0)
         return NULL;
+
+    static char name[64];
+    for (pcap_if_t *d = devs; d; d = d->next) {
+        for (pcap_addr_t *a = d->addresses; a; a = a->next) {
+            if (!a->addr || a->addr->sa_family != AF_INET)
+                continue;
+            struct sockaddr_in *sin = (struct sockaddr_in *)a->addr;
+            if (sin->sin_addr.s_addr == local_ip) {
+                strncpy(name, d->name, sizeof(name) - 1);
+                name[sizeof(name) - 1] = '\0';
+                pcap_freealldevs(devs);
+                return name;
+            }
+        }
+    }
+
+    /* fallback: first non-loopback interface */
     for (pcap_if_t *d = devs; d; d = d->next) {
         if (!(d->flags & PCAP_IF_LOOPBACK)) {
-            static char name[64];
             strncpy(name, d->name, sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
             pcap_freealldevs(devs);
             return name;
         }
     }
+
     pcap_freealldevs(devs);
     return NULL;
 }
 
-pcap_t *open_pcap(const char *dest_ip, uint16_t sp_min, uint16_t sp_max) {
-    const char *iface = get_default_iface();
+pcap_t *open_pcap(const char *dest_ip, uint32_t local_ip,
+                  uint16_t sp_min, uint16_t sp_max) {
+    const char *iface = get_iface_for_ip(local_ip);
     if (!iface) {
         fprintf(stderr, "ft_nmap: no usable network interface\n");
         return NULL;
@@ -32,7 +53,6 @@ pcap_t *open_pcap(const char *dest_ip, uint16_t sp_min, uint16_t sp_max) {
         return NULL;
     }
 
-    /* capture TCP replies from target and ICMP errors from anywhere */
     char filter[256];
     snprintf(filter, sizeof(filter),
              "(tcp and src host %s and dst portrange %u-%u)"

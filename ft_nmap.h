@@ -71,7 +71,8 @@ int      resolve_target(const char *host, struct sockaddr_in *out);
 
 /* pcap_utils.c */
 #include <pcap.h>
-pcap_t  *open_pcap(const char *dest_ip, uint16_t sp_min, uint16_t sp_max);
+pcap_t  *open_pcap(const char *dest_ip, uint32_t local_ip,
+                   uint16_t sp_min, uint16_t sp_max);
 
 /* tcp.c */
 t_state  tcp_scan(struct sockaddr_in *dest, uint16_t port,

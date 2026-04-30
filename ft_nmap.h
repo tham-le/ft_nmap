@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <netinet/in.h>
 
 #define MAX_IPS      256
 #define MAX_PORTS    1024

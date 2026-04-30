@@ -1,4 +1,5 @@
 #include "ft_nmap.h"
+#include <arpa/inet.h>
 
 int main(int argc, char **argv) {
     if (geteuid() != 0) {
@@ -15,11 +16,18 @@ int main(int argc, char **argv) {
     memset(&opts, 0, sizeof(opts));
     parse_arguments(argc, argv, &opts);
 
-    printf("Targets (%d):\n", opts.ip_count);
-    for (int i = 0; i < opts.ip_count; i++)
-        printf("  %s\n", opts.ips[i]);
-    printf("Ports  : %d ports\n", opts.port_count);
-    printf("Scans  : 0x%02x\n", opts.scan_flags);
-    printf("Threads: %d\n", opts.speedup);
+    printf("Threads: %d | Ports: %d | Scans: 0x%02x\n",
+           opts.speedup, opts.port_count, opts.scan_flags);
+
+    for (int i = 0; i < opts.ip_count; i++) {
+        struct sockaddr_in dest;
+        if (resolve_target(opts.ips[i], &dest) < 0) {
+            fprintf(stderr, "ft_nmap: cannot resolve %s\n", opts.ips[i]);
+            continue;
+        }
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &dest.sin_addr, ip, sizeof(ip));
+        printf("Target: %s -> %s\n", opts.ips[i], ip);
+    }
     return 0;
 }

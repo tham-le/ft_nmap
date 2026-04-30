@@ -2,7 +2,7 @@ NAME   = ft_nmap
 CC     = cc
 CFLAGS = -Wall -Wextra -Werror
 
-SRC    = main.c args.c
+SRC    = main.c args.c utils.c
 OBJ    = $(SRC:.c=.o)
 LIBS   = -lpcap -lpthread -lm
 

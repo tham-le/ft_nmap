@@ -79,6 +79,9 @@ t_state  tcp_scan(struct sockaddr_in *dest, uint16_t port,
                   uint8_t tcp_flags, int scan_bit,
                   int raw_sock, void *pcap);
 
+/* udp.c */
+t_state  udp_scan(struct sockaddr_in *dest, uint16_t port);
+
 /* scan.c */
 void     run_scan(t_options *opts, struct sockaddr_in *dest,
                   const char *dest_ip, t_result *results);

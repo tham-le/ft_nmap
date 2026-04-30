@@ -44,9 +44,8 @@ static void scan_port(struct sockaddr_in *dest, uint16_t port,
                                   g_tcp_flags[i], g_scan_bits[i],
                                   raw_sock, pcap);
     }
-    /* UDP stub for now */
     if (scan_flags & SCAN_UDP)
-        res->states[5] = STATE_OPEN_FILTERED;
+        res->states[5] = udp_scan(dest, port);
 }
 
 static void *thread_worker(void *arg) {

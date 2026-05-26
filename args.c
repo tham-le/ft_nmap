@@ -1,5 +1,22 @@
 #include "ft_nmap.h"
 
+static int port_already_added(t_options *opts, uint16_t port) {
+    for (int i = 0; i < opts->port_count; i++)
+        if (opts->ports[i] == port)
+            return 1;
+    return 0;
+}
+
+static void add_port(t_options *opts, uint16_t port) {
+    if (port_already_added(opts, port))
+        return;
+    if (opts->port_count >= MAX_PORTS) {
+        fprintf(stderr, "ft_nmap: port count exceeds maximum of %d\n", MAX_PORTS);
+        exit(1);
+    }
+    opts->ports[opts->port_count++] = port;
+}
+
 static void parse_ports(const char *spec, t_options *opts) {
     char buf[4096];
     strncpy(buf, spec, sizeof(buf) - 1);
@@ -15,16 +32,15 @@ static void parse_ports(const char *spec, t_options *opts) {
                 fprintf(stderr, "ft_nmap: invalid port range: %s\n", tok);
                 exit(1);
             }
-            for (int p = lo; p <= hi && opts->port_count < MAX_PORTS; p++)
-                opts->ports[opts->port_count++] = (uint16_t)p;
+            for (int p = lo; p <= hi; p++)
+                add_port(opts, (uint16_t)p);
         } else {
             int p = atoi(tok);
             if (p < 1 || p > 65535) {
                 fprintf(stderr, "ft_nmap: invalid port: %s\n", tok);
                 exit(1);
             }
-            if (opts->port_count < MAX_PORTS)
-                opts->ports[opts->port_count++] = (uint16_t)p;
+            add_port(opts, (uint16_t)p);
         }
         tok = strtok(NULL, ",");
     }
@@ -35,7 +51,7 @@ static void parse_scan_types(const char *spec, t_options *opts) {
     strncpy(buf, spec, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
-    char *tok = strtok(buf, ",");
+    char *tok = strtok(buf, ",/");
     while (tok) {
         if      (strcmp(tok, "SYN")  == 0) opts->scan_flags |= SCAN_SYN;
         else if (strcmp(tok, "NULL") == 0) opts->scan_flags |= SCAN_NULL;
@@ -47,7 +63,7 @@ static void parse_scan_types(const char *spec, t_options *opts) {
             fprintf(stderr, "ft_nmap: unknown scan type: %s\n", tok);
             exit(1);
         }
-        tok = strtok(NULL, ",");
+        tok = strtok(NULL, ",/");
     }
 }
 
@@ -59,7 +75,7 @@ static void parse_ips_from_file(const char *path, t_options *opts) {
     }
     char line[256];
     while (fgets(line, sizeof(line), f) && opts->ip_count < MAX_IPS) {
-        line[strcspn(line, "\n")] = '\0';
+        line[strcspn(line, "\r\n")] = '\0';
         if (line[0])
             opts->ips[opts->ip_count++] = strdup(line);
     }
@@ -72,8 +88,8 @@ static void usage(const char *prog) {
            "  --ip <addr>          Target IP or hostname (repeatable)\n"
            "  --file <path>        File with one target per line\n"
            "  --ports <spec>       Ports to scan, e.g. 1-1024,8080\n"
-           "  --scan <types>       Comma-separated: SYN,NULL,ACK,FIN,XMAS,UDP\n"
-           "  --speedup <n>        Number of threads (1-%d, default 1)\n",
+           "  --scan <types>       Comma or slash separated: SYN/NULL/ACK/FIN/XMAS/UDP\n"
+           "  --speedup <n>        Number of threads (0-%d, default 0)\n",
            prog, MAX_SPEEDUP);
     exit(0);
 }
@@ -93,8 +109,8 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
             parse_scan_types(argv[++i], opts);
         } else if (strcmp(argv[i], "--speedup") == 0 && i + 1 < argc) {
             opts->speedup = atoi(argv[++i]);
-            if (opts->speedup < 1 || opts->speedup > MAX_SPEEDUP) {
-                fprintf(stderr, "ft_nmap: speedup must be 1-%d\n", MAX_SPEEDUP);
+            if (opts->speedup < 0 || opts->speedup > MAX_SPEEDUP) {
+                fprintf(stderr, "ft_nmap: speedup must be 0-%d\n", MAX_SPEEDUP);
                 exit(1);
             }
         } else {

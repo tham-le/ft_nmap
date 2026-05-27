@@ -64,7 +64,8 @@ t_state udp_scan(struct sockaddr_in *dest, uint16_t port) {
     }
     close(udp_sock);
 
-    struct timeval tv = { .tv_sec = UDP_TIMEOUT, .tv_usec = 0 };
+    struct timeval tv = { .tv_sec = UDP_TIMEOUT_MS / 1000,
+                         .tv_usec = (UDP_TIMEOUT_MS % 1000) * 1000 };
     setsockopt(icmp_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     char buf[ICMP_BUF_SIZE];

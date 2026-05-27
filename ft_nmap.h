@@ -25,8 +25,8 @@
 #define SCAN_COUNT 6
 
 #define SRC_PORT_BASE 40000
-#define SCAN_TIMEOUT  1   /* seconds to wait for a TCP reply */
-#define UDP_TIMEOUT   2   /* seconds to wait for ICMP unreachable */
+#define SCAN_TIMEOUT_MS  500   /* ms to wait for a TCP reply */
+#define UDP_TIMEOUT_MS   1500  /* ms to wait for ICMP unreachable */
 
 typedef enum e_state {
     STATE_UNKNOWN = 0,

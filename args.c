@@ -131,6 +131,4 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
     }
     if (opts->scan_flags == 0)
         opts->scan_flags = SCAN_ALL;
-    if (opts->speedup == 0)
-        opts->speedup = 1;
 }

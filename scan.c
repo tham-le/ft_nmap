@@ -71,7 +71,7 @@ static void *thread_worker(void *arg) {
 
 void run_scan(t_options *opts, struct sockaddr_in *dest,
               const char *dest_ip, t_result *results) {
-    int nthreads = opts->speedup ? opts->speedup : 1;
+    int nthreads = (opts->speedup > 0) ? opts->speedup : 1;
     if (nthreads > opts->port_count)
         nthreads = opts->port_count;
 

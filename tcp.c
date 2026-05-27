@@ -166,7 +166,12 @@ t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
 
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
-    deadline.tv_sec += SCAN_TIMEOUT;
+    deadline.tv_sec  += SCAN_TIMEOUT_MS / 1000;
+    deadline.tv_usec += (SCAN_TIMEOUT_MS % 1000) * 1000;
+    if (deadline.tv_usec >= 1000000) {
+        deadline.tv_sec++;
+        deadline.tv_usec -= 1000000;
+    }
 
     while (1) {
         struct timeval now;

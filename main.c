@@ -12,8 +12,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    srand((unsigned)time(NULL) ^ (unsigned)getpid());
-
     t_options opts;
     memset(&opts, 0, sizeof(opts));
     parse_arguments(argc, argv, &opts);
@@ -40,5 +38,6 @@ int main(int argc, char **argv) {
                        + (t1.tv_nsec - t0.tv_nsec) / 1e9;
         print_results(results, opts.port_count, ip, opts.scan_flags, elapsed);
     }
+    free_options(&opts);
     return 0;
 }

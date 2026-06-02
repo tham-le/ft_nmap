@@ -1,4 +1,17 @@
 #include "ft_nmap.h"
+#include <errno.h>
+#include <limits.h>
+
+/* strict base-10 parse: rejects empty input and any trailing garbage */
+static int parse_uint(const char *s, int *out) {
+    char *end;
+    errno = 0;
+    long v = strtol(s, &end, 10);
+    if (errno != 0 || end == s || *end != '\0' || v < 0 || v > INT_MAX)
+        return -1;
+    *out = (int)v;
+    return 0;
+}
 
 static int port_already_added(t_options *opts, uint16_t port) {
     for (int i = 0; i < opts->port_count; i++)
@@ -26,17 +39,18 @@ static void parse_ports(const char *spec, t_options *opts) {
     while (tok) {
         char *dash = strchr(tok, '-');
         if (dash) {
-            int lo = atoi(tok);
-            int hi = atoi(dash + 1);
-            if (lo < 1 || hi > 65535 || lo > hi) {
-                fprintf(stderr, "ft_nmap: invalid port range: %s\n", tok);
+            *dash = '\0';
+            int lo, hi;
+            if (parse_uint(tok, &lo) < 0 || parse_uint(dash + 1, &hi) < 0
+                    || lo < 1 || hi > 65535 || lo > hi) {
+                fprintf(stderr, "ft_nmap: invalid port range\n");
                 exit(1);
             }
             for (int p = lo; p <= hi; p++)
                 add_port(opts, (uint16_t)p);
         } else {
-            int p = atoi(tok);
-            if (p < 1 || p > 65535) {
+            int p;
+            if (parse_uint(tok, &p) < 0 || p < 1 || p > 65535) {
                 fprintf(stderr, "ft_nmap: invalid port: %s\n", tok);
                 exit(1);
             }
@@ -51,7 +65,7 @@ static void parse_scan_types(const char *spec, t_options *opts) {
     strncpy(buf, spec, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
-    char *tok = strtok(buf, ",/");
+    char *tok = strtok(buf, ", /");
     while (tok) {
         if      (strcmp(tok, "SYN")  == 0) opts->scan_flags |= SCAN_SYN;
         else if (strcmp(tok, "NULL") == 0) opts->scan_flags |= SCAN_NULL;
@@ -63,7 +77,7 @@ static void parse_scan_types(const char *spec, t_options *opts) {
             fprintf(stderr, "ft_nmap: unknown scan type: %s\n", tok);
             exit(1);
         }
-        tok = strtok(NULL, ",/");
+        tok = strtok(NULL, ", /");
     }
 }
 
@@ -100,7 +114,7 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
             usage(argv[0]);
         } else if (strcmp(argv[i], "--ip") == 0 && i + 1 < argc) {
             if (opts->ip_count < MAX_IPS)
-                opts->ips[opts->ip_count++] = argv[++i];
+                opts->ips[opts->ip_count++] = strdup(argv[++i]);
         } else if (strcmp(argv[i], "--file") == 0 && i + 1 < argc) {
             parse_ips_from_file(argv[++i], opts);
         } else if ((strcmp(argv[i], "--ports") == 0 || strcmp(argv[i], "--port") == 0) && i + 1 < argc) {
@@ -108,8 +122,8 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
         } else if (strcmp(argv[i], "--scan") == 0 && i + 1 < argc) {
             parse_scan_types(argv[++i], opts);
         } else if (strcmp(argv[i], "--speedup") == 0 && i + 1 < argc) {
-            opts->speedup = atoi(argv[++i]);
-            if (opts->speedup < 0 || opts->speedup > MAX_SPEEDUP) {
+            if (parse_uint(argv[++i], &opts->speedup) < 0
+                    || opts->speedup > MAX_SPEEDUP) {
                 fprintf(stderr, "ft_nmap: speedup must be 0-%d\n", MAX_SPEEDUP);
                 exit(1);
             }
@@ -131,4 +145,10 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
     }
     if (opts->scan_flags == 0)
         opts->scan_flags = SCAN_ALL;
+}
+
+void free_options(t_options *opts) {
+    for (int i = 0; i < opts->ip_count; i++)
+        free(opts->ips[i]);
+    opts->ip_count = 0;
 }

@@ -3,10 +3,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <time.h>
 
 static void scan_port(struct sockaddr_in *dest, uint16_t port,
                       int scan_flags, uint32_t src_ip, int thread_id,
-                      int raw_sock, pcap_t *pcap, t_result *res) {
+                      int raw_sock, pcap_t *pcap, t_result *res,
+                      unsigned int *seed) {
     res->port = port;
     for (int i = 0; i < SCAN_COUNT; i++) {
         if (g_scan_types[i].bit == SCAN_UDP)
@@ -16,7 +18,7 @@ static void scan_port(struct sockaddr_in *dest, uint16_t port,
         uint16_t src_port = (uint16_t)(SRC_PORT_BASE + thread_id * SCAN_COUNT + i);
         res->states[i] = tcp_scan(dest, port, src_port, src_ip,
                                   g_scan_types[i].tcp_flags, g_scan_types[i].bit,
-                                  raw_sock, pcap);
+                                  raw_sock, pcap, seed);
     }
     for (int i = 0; i < SCAN_COUNT; i++) {
         if (g_scan_types[i].bit == SCAN_UDP) {
@@ -29,6 +31,10 @@ static void scan_port(struct sockaddr_in *dest, uint16_t port,
 
 static void *thread_worker(void *arg) {
     t_thread_arg *a = arg;
+
+    /* per-thread RNG state so rand_r() needs no shared global */
+    unsigned int seed = (unsigned int)time(NULL)
+                      ^ ((unsigned int)a->thread_id * 2654435761u);
 
     int raw_sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (raw_sock < 0) { perror("socket"); return NULL; }
@@ -59,7 +65,7 @@ static void *thread_worker(void *arg) {
         t_result res;
         memset(&res, 0, sizeof(res));
         scan_port(&a->dest, a->ports[i], a->scan_flags, src_ip,
-                  a->thread_id, raw_sock, pcap, &res);
+                  a->thread_id, raw_sock, pcap, &res, &seed);
 
         a->results[i] = res;
     }

@@ -3,6 +3,7 @@
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 
 #define ICMP_BUF_SIZE 1024
@@ -64,15 +65,33 @@ t_state udp_scan(struct sockaddr_in *dest, uint16_t port) {
     }
     close(udp_sock);
 
-    struct timeval tv = { .tv_sec = UDP_TIMEOUT_MS / 1000,
-                         .tv_usec = (UDP_TIMEOUT_MS % 1000) * 1000 };
-    setsockopt(icmp_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    struct timeval deadline;
+    gettimeofday(&deadline, NULL);
+    deadline.tv_sec  += UDP_TIMEOUT_MS / 1000;
+    deadline.tv_usec += (UDP_TIMEOUT_MS % 1000) * 1000;
+    if (deadline.tv_usec >= 1000000) {
+        deadline.tv_sec++;
+        deadline.tv_usec -= 1000000;
+    }
 
     char buf[ICMP_BUF_SIZE];
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
 
     while (1) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        if (timercmp(&now, &deadline, >=)) {
+            close(icmp_sock);
+            return STATE_OPEN_FILTERED;
+        }
+
+        /* shrink the recv timeout to the time left so unrelated ICMP
+           traffic can't keep extending the total wait */
+        struct timeval tv;
+        timersub(&deadline, &now, &tv);
+        setsockopt(icmp_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
         ssize_t n = recvfrom(icmp_sock, buf, sizeof(buf), 0,
                              (struct sockaddr *)&from, &fromlen);
         if (n < 0) {

@@ -72,6 +72,7 @@ typedef struct s_options {
 
 /* args.c */
 void      parse_arguments(int argc, char **argv, t_options *opts);
+void      free_options(t_options *opts);
 
 /* utils.c */
 uint16_t  checksum(const void *data, size_t len);
@@ -86,7 +87,7 @@ pcap_t   *open_pcap(const char *dest_ip, uint32_t local_ip,
 t_state   tcp_scan(struct sockaddr_in *dest, uint16_t port,
                    uint16_t src_port, uint32_t src_ip,
                    uint8_t tcp_flags, int scan_bit,
-                   int raw_sock, pcap_t *pcap);
+                   int raw_sock, pcap_t *pcap, unsigned int *seed);
 
 /* udp.c */
 t_state   udp_scan(struct sockaddr_in *dest, uint16_t port);

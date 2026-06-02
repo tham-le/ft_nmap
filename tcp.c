@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <poll.h>
+#include <errno.h>
 
 /* ICMP Dest Unreach embeds at least 8 bytes of the original datagram,
    enough to read sport (2) + dport (2) + seq (4) from the TCP header */
@@ -36,7 +38,7 @@ static uint16_t tcp_checksum(uint32_t src_ip, uint32_t dst_ip,
 
 static void build_packet(char *pkt, uint32_t src_ip, uint32_t dst_ip,
                          uint16_t src_port, uint16_t dst_port,
-                         uint8_t tcp_flags) {
+                         uint8_t tcp_flags, unsigned int *seed) {
     struct iphdr  *iph = (struct iphdr *)pkt;
     struct tcphdr *tcp = (struct tcphdr *)(pkt + sizeof(struct iphdr));
 
@@ -44,7 +46,7 @@ static void build_packet(char *pkt, uint32_t src_ip, uint32_t dst_ip,
     iph->ihl      = 5;
     iph->tos      = 0;
     iph->tot_len  = htons(sizeof(struct iphdr) + sizeof(struct tcphdr));
-    iph->id       = htons((uint16_t)(rand() & 0xFFFF));
+    iph->id       = htons((uint16_t)(rand_r(seed) & 0xFFFF));
     iph->frag_off = 0;
     iph->ttl      = 64;
     iph->protocol = IPPROTO_TCP;
@@ -54,7 +56,7 @@ static void build_packet(char *pkt, uint32_t src_ip, uint32_t dst_ip,
 
     tcp->th_sport = htons(src_port);
     tcp->th_dport = htons(dst_port);
-    tcp->th_seq   = htonl((uint32_t)rand());
+    tcp->th_seq   = htonl((uint32_t)rand_r(seed));
     tcp->th_ack   = 0;
     tcp->th_off   = 5;
     tcp->th_flags = tcp_flags;
@@ -151,11 +153,11 @@ static t_state classify_tcp_pkt(const u_char *pkt, int pkt_len,
 t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
                  uint16_t src_port, uint32_t src_ip,
                  uint8_t tcp_flags, int scan_bit,
-                 int raw_sock, pcap_t *pcap) {
+                 int raw_sock, pcap_t *pcap, unsigned int *seed) {
     char pkt[sizeof(struct iphdr) + sizeof(struct tcphdr)];
     memset(pkt, 0, sizeof(pkt));
     build_packet(pkt, src_ip, dest->sin_addr.s_addr,
-                 src_port, port, tcp_flags);
+                 src_port, port, tcp_flags, seed);
 
     if (sendto(raw_sock, pkt, sizeof(pkt), 0,
                (struct sockaddr *)dest, sizeof(*dest)) < 0)
@@ -163,6 +165,8 @@ t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
 
     if (!pcap)
         return STATE_FILTERED;
+
+    int fd = pcap_get_selectable_fd(pcap);
 
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
@@ -176,8 +180,21 @@ t_state tcp_scan(struct sockaddr_in *dest, uint16_t port,
     while (1) {
         struct timeval now;
         gettimeofday(&now, NULL);
-        if (timercmp(&now, &deadline, >=))
+        long remaining_ms = (deadline.tv_sec - now.tv_sec) * 1000
+                          + (deadline.tv_usec - now.tv_usec) / 1000;
+        if (remaining_ms <= 0)
             break;
+
+        /* block until the capture fd is readable instead of busy-spinning */
+        if (fd >= 0) {
+            struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
+            int pr = poll(&pfd, 1, (int)remaining_ms);
+            if (pr <= 0) {
+                if (pr < 0 && errno == EINTR)
+                    continue;
+                continue; /* timeout or error: re-check the deadline */
+            }
+        }
 
         struct pcap_pkthdr *hdr;
         const u_char       *data;

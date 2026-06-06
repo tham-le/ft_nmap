@@ -5,6 +5,8 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <poll.h>
+#include <errno.h>
 
 #define ICMP_BUF_SIZE 1024
 
@@ -63,7 +65,7 @@ t_state udp_scan(struct sockaddr_in *dest, uint16_t port) {
         close(icmp_sock);
         return STATE_OPEN_FILTERED;
     }
-    close(udp_sock);
+    /* keep udp_sock open: a reply from the target means the port is Open */
 
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
@@ -81,27 +83,50 @@ t_state udp_scan(struct sockaddr_in *dest, uint16_t port) {
     while (1) {
         struct timeval now;
         gettimeofday(&now, NULL);
-        if (timercmp(&now, &deadline, >=)) {
-            close(icmp_sock);
-            return STATE_OPEN_FILTERED;
-        }
+        if (timercmp(&now, &deadline, >=))
+            break;
 
-        /* shrink the recv timeout to the time left so unrelated ICMP
-           traffic can't keep extending the total wait */
         struct timeval tv;
         timersub(&deadline, &now, &tv);
-        setsockopt(icmp_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        long remaining_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
 
-        ssize_t n = recvfrom(icmp_sock, buf, sizeof(buf), 0,
-                             (struct sockaddr *)&from, &fromlen);
-        if (n < 0) {
-            close(icmp_sock);
-            return STATE_OPEN_FILTERED;
+        struct pollfd pfds[2];
+        pfds[0].fd     = icmp_sock;
+        pfds[0].events = POLLIN;
+        pfds[1].fd     = udp_sock;
+        pfds[1].events = POLLIN;
+
+        int pr = poll(pfds, 2, (int)remaining_ms);
+        if (pr < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
         }
-        t_state s = classify_icmp_reply(buf, n, dest->sin_addr.s_addr, port);
-        if (s != STATE_UNKNOWN) {
+        if (pr == 0)
+            continue;
+
+        if (pfds[1].revents & POLLIN) {
+            /* UDP reply from target: port is open */
+            close(udp_sock);
             close(icmp_sock);
-            return s;
+            return STATE_OPEN;
+        }
+
+        if (pfds[0].revents & POLLIN) {
+            ssize_t n = recvfrom(icmp_sock, buf, sizeof(buf), 0,
+                                 (struct sockaddr *)&from, &fromlen);
+            if (n < 0)
+                continue;
+            t_state s = classify_icmp_reply(buf, n, dest->sin_addr.s_addr, port);
+            if (s != STATE_UNKNOWN) {
+                close(udp_sock);
+                close(icmp_sock);
+                return s;
+            }
         }
     }
+
+    close(udp_sock);
+    close(icmp_sock);
+    return STATE_OPEN_FILTERED;
 }

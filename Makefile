@@ -25,4 +25,10 @@ re: fclean all
 test: all
 	./run_tests.sh
 
-.PHONY: all clean fclean re test
+docker:
+	docker build -t ft_nmap .
+
+docker-shell: docker
+	docker run -it --rm --cap-add=NET_RAW --cap-add=NET_ADMIN --entrypoint bash ft_nmap
+
+.PHONY: all clean fclean re test docker docker-shell

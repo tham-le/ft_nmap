@@ -36,27 +36,32 @@ static void *thread_worker(void *arg) {
     unsigned int seed = (unsigned int)time(NULL)
                       ^ ((unsigned int)a->thread_id * 2654435761u);
 
-    int raw_sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    if (raw_sock < 0) { perror("socket"); return NULL; }
-    int one = 1;
-    if (setsockopt(raw_sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
-        perror("setsockopt"); close(raw_sock); return NULL;
-    }
+    /* only the TCP scans craft packets, so a UDP-only scan needs no raw
+       socket, no pcap handle, and therefore no privilege */
+    int      raw_sock = -1;
+    uint32_t src_ip   = 0;
+    pcap_t  *pcap     = NULL;
 
-    /* each thread has its own source port range so filters don't overlap */
-    uint16_t sp_min = (uint16_t)(SRC_PORT_BASE + a->thread_id * SCAN_COUNT);
-    uint16_t sp_max = (uint16_t)(sp_min + SCAN_COUNT - 2); /* -1 count→index, -1 exclude UDP slot */
+    if (a->scan_flags & SCAN_RAW_TCP) {
+        raw_sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        if (raw_sock < 0) { perror("socket"); return NULL; }
+        int one = 1;
+        if (setsockopt(raw_sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
+            perror("setsockopt"); close(raw_sock); return NULL;
+        }
 
-    /* get local IP first so pcap opens on the correct interface */
-    uint32_t src_ip = get_local_ip(&a->dest);
-    if (src_ip == 0) {
-        fprintf(stderr, "ft_nmap: failed to determine local IP\n");
-        close(raw_sock);
-        return NULL;
-    }
+        /* each thread has its own source port range so filters don't overlap */
+        uint16_t sp_min = (uint16_t)(SRC_PORT_BASE + a->thread_id * SCAN_COUNT);
+        uint16_t sp_max = (uint16_t)(sp_min + SCAN_COUNT - 2); /* -1 count→index, -1 exclude UDP slot */
 
-    pcap_t *pcap = NULL;
-    if (a->scan_flags & (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_FIN | SCAN_XMAS)) {
+        /* get local IP first so pcap opens on the correct interface */
+        src_ip = get_local_ip(&a->dest);
+        if (src_ip == 0) {
+            fprintf(stderr, "ft_nmap: failed to determine local IP\n");
+            close(raw_sock);
+            return NULL;
+        }
+
         pcap = open_pcap(a->dest_ip, src_ip, sp_min, sp_max);
         if (!pcap) { close(raw_sock); return NULL; }
     }
@@ -71,7 +76,7 @@ static void *thread_worker(void *arg) {
     }
 
     if (pcap) pcap_close(pcap);
-    close(raw_sock);
+    if (raw_sock >= 0) close(raw_sock);
     return NULL;
 }
 

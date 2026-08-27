@@ -22,6 +22,8 @@
 #define SCAN_XMAS  (1 << 4)
 #define SCAN_UDP   (1 << 5)
 #define SCAN_ALL   0x3F
+/* the scans that need a raw socket to send and pcap to receive */
+#define SCAN_RAW_TCP (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_FIN | SCAN_XMAS)
 #define SCAN_COUNT 6
 
 #define SRC_PORT_BASE 40000

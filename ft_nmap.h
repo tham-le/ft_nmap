@@ -63,18 +63,27 @@ typedef struct s_thread_arg {
     int                 thread_id;
 } t_thread_arg;
 
+/* how to decide whether we may use raw sockets, like nmap's o.isr00t */
+typedef enum e_priv_mode {
+    PRIV_AUTO = 0,  /* look at the effective uid */
+    PRIV_FORCE_ON,  /* --privileged */
+    PRIV_FORCE_OFF, /* --unprivileged */
+} t_priv_mode;
+
 typedef struct s_options {
-    char     *ips[MAX_IPS];
-    int       ip_count;
-    uint16_t  ports[MAX_PORTS];
-    int       port_count;
-    int       scan_flags;
-    int       speedup;
+    char        *ips[MAX_IPS];
+    int          ip_count;
+    uint16_t     ports[MAX_PORTS];
+    int          port_count;
+    int          scan_flags;
+    int          speedup;
+    t_priv_mode  priv_mode;
 } t_options;
 
 /* args.c */
 void      parse_arguments(int argc, char **argv, t_options *opts);
 void      free_options(t_options *opts);
+int       have_raw_privilege(const t_options *opts);
 
 /* utils.c */
 uint16_t  checksum(const void *data, size_t len);

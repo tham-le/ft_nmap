@@ -43,6 +43,15 @@ check "speedup -1 invalid"            1 $BIN --ip 127.0.0.1 --speedup -1
 check "unknown scan type invalid"     1 $BIN --ip 127.0.0.1 --scan INVALID
 check "bad hostname exits cleanly"    0 $BIN --ip notahost.invalid --ports 80
 
+echo "== privilege model =="
+# --unprivileged makes this root-run suite take the unprivileged branch
+check "--unprivileged refuses SYN"    1 $BIN --ip 127.0.0.1 --ports 80 --scan SYN --unprivileged
+check "--unprivileged refuses ACK"    1 $BIN --ip 127.0.0.1 --ports 80 --scan ACK --unprivileged
+check "env var refuses SYN"           1 env FT_NMAP_UNPRIVILEGED=1 $BIN --ip 127.0.0.1 --ports 80 --scan SYN
+check "--unprivileged allows UDP"     0 $BIN --ip 127.0.0.1 --ports 80 --scan UDP --unprivileged
+check "--unprivileged allows --help"  0 $BIN --help --unprivileged
+check "--privileged allows SYN"       0 $BIN --ip 127.0.0.1 --ports 80 --scan SYN --privileged
+
 echo "== live scans (no crash) =="
 check "SYN scan"                      0 $BIN --ip 127.0.0.1 --ports 20-30 --scan SYN
 check "all scan types"               0 $BIN --ip 127.0.0.1 --ports 79-81

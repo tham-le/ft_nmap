@@ -183,6 +183,12 @@ One difference from nmap remains, and it cannot be closed. Given no `--scan`, ft
 | ACK | RST = unfiltered, no reply = filtered |
 | UDP | Datagram reply = open, ICMP port unreachable = closed, other ICMP unreachable = filtered, timeout = open/filtered |
 
+## Service names
+
+The service column comes from `getservbyport()` first, so a machine with a full `/etc/services` keeps using it. Debian and Ubuntu trimmed that file years ago, which left most of the default 1 to 1024 range printing `Unassigned`, so `services.c` carries a fallback table for that range built from the [IANA port registry](https://www.iana.org/assignments/service-names-port-numbers/), plus four older names IANA dropped but `/etc/services` still has. Real nmap has the same table shipped as `nmap-services` and never asks the system at all.
+
+Of the 726 ports nmap names in 1 to 1024, ft_nmap now names 684. The rest differ because nmap's database is its own rather than IANA's: 42 are names only nmap carries, and 68 are ports both name but spell differently, such as `67=bootps` here against `dhcps` in nmap, or `88=kerberos` against `kerberos-sec`. Where they differ, ft_nmap matches `/etc/services` and IANA. Closing the last gap would mean shipping nmap's own data file.
+
 ## Example
 
 ```bash

@@ -15,6 +15,9 @@
 #define MAX_PORTS    1024
 #define MAX_SPEEDUP  250
 
+/* highest port covered by the built-in service name table */
+#define SERVICE_MAX_PORT 1024
+
 #define SCAN_SYN   (1 << 0)
 #define SCAN_NULL  (1 << 1)
 #define SCAN_ACK   (1 << 2)
@@ -106,6 +109,9 @@ t_state   udp_scan(struct sockaddr_in *dest, uint16_t port);
 /* scan.c */
 void      run_scan(t_options *opts, struct sockaddr_in *dest,
                    const char *dest_ip, t_result *results);
+
+/* services.c */
+const char *service_name_fallback(uint16_t port, int is_udp);
 
 /* output.c */
 void      print_scan_header(t_options *opts, const char *ip);

@@ -30,12 +30,19 @@ static t_state get_conclusion(const t_result *res, int scan_flags) {
 }
 
 static void lookup_service(t_result *res, int scan_flags) {
-    const char *proto = (scan_flags & ~SCAN_UDP) ? "tcp" : "udp";
+    int         is_udp = (scan_flags & ~SCAN_UDP) ? 0 : 1;
+    const char *proto  = is_udp ? "udp" : "tcp";
+    const char *name   = NULL;
+
     struct servent *se = getservbyport(htons(res->port), proto);
     if (se)
-        strncpy(res->service, se->s_name, sizeof(res->service) - 1);
+        name = se->s_name;
     else
-        strncpy(res->service, "Unassigned", sizeof(res->service) - 1);
+        /* /etc/services is incomplete on most distributions */
+        name = service_name_fallback(res->port, is_udp);
+
+    strncpy(res->service, name ? name : "Unassigned",
+            sizeof(res->service) - 1);
     res->service[sizeof(res->service) - 1] = '\0';
 }
 

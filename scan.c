@@ -29,6 +29,9 @@ static void scan_port(struct sockaddr_in *dest, uint16_t port,
     }
 }
 
+/* returned by a worker that could not set itself up */
+static int g_worker_failed;
+
 static void *thread_worker(void *arg) {
     t_thread_arg *a = arg;
 
@@ -44,10 +47,10 @@ static void *thread_worker(void *arg) {
 
     if (a->scan_flags & SCAN_RAW_TCP) {
         raw_sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-        if (raw_sock < 0) { perror("socket"); return NULL; }
+        if (raw_sock < 0) { perror("socket"); return &g_worker_failed; }
         int one = 1;
         if (setsockopt(raw_sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
-            perror("setsockopt"); close(raw_sock); return NULL;
+            perror("setsockopt"); close(raw_sock); return &g_worker_failed;
         }
 
         /* each thread has its own source port range so filters don't overlap */
@@ -59,11 +62,11 @@ static void *thread_worker(void *arg) {
         if (src_ip == 0) {
             fprintf(stderr, "ft_nmap: failed to determine local IP\n");
             close(raw_sock);
-            return NULL;
+            return &g_worker_failed;
         }
 
         pcap = open_pcap(a->dest_ip, src_ip, sp_min, sp_max);
-        if (!pcap) { close(raw_sock); return NULL; }
+        if (!pcap) { close(raw_sock); return &g_worker_failed; }
     }
 
     for (int i = 0; i < a->port_count; i++) {
@@ -80,8 +83,8 @@ static void *thread_worker(void *arg) {
     return NULL;
 }
 
-void run_scan(t_options *opts, struct sockaddr_in *dest,
-              const char *dest_ip, t_result *results) {
+int run_scan(t_options *opts, struct sockaddr_in *dest,
+             const char *dest_ip, t_result *results) {
     int nthreads = (opts->speedup > 0) ? opts->speedup : 1;
     if (nthreads > opts->port_count)
         nthreads = opts->port_count;
@@ -111,7 +114,16 @@ void run_scan(t_options *opts, struct sockaddr_in *dest,
             fprintf(stderr, "ft_nmap: pthread_create failed\n");
     }
 
-    for (int i = 0; i < nthreads; i++)
-        if (ok[i])
-            pthread_join(threads[i], NULL);
+    int failed = 0;
+    for (int i = 0; i < nthreads; i++) {
+        if (!ok[i]) {
+            failed = 1;
+            continue;
+        }
+        void *ret = NULL;
+        pthread_join(threads[i], &ret);
+        if (ret)
+            failed = 1;
+    }
+    return failed ? -1 : 0;
 }

@@ -107,7 +107,8 @@ t_state   tcp_scan(struct sockaddr_in *dest, uint16_t port,
 t_state   udp_scan(struct sockaddr_in *dest, uint16_t port);
 
 /* scan.c */
-void      run_scan(t_options *opts, struct sockaddr_in *dest,
+/* returns 0 if every worker ran, -1 if any of them could not start */
+int       run_scan(t_options *opts, struct sockaddr_in *dest,
                    const char *dest_ip, t_result *results);
 
 /* services.c */

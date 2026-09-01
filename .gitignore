@@ -2,3 +2,5 @@
 ft_nmap
 TESTS.md
 .vagrant/
+.claude/settings.local.json
+test-output.txt

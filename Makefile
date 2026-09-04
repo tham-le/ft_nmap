@@ -23,4 +23,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re test docker docker-shell
+.PHONY: all clean fclean re

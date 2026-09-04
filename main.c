@@ -12,18 +12,6 @@ int main(int argc, char **argv) {
     memset(&opts, 0, sizeof(opts));
     parse_arguments(argc, argv, &opts);
 
-    /* Only the five TCP scans need raw sockets, so check after parsing and
-       only for those. UDP reads its ICMP answer off the socket error queue. */
-    if ((opts.scan_flags & SCAN_RAW_TCP) && !have_raw_privilege(&opts)) {
-        fprintf(stderr,
-                "ft_nmap: you requested a scan type which requires root"
-                " privileges\n"
-                "ft_nmap: run it under sudo, or pass --privileged if this"
-                " binary has cap_net_raw\n");
-        free_options(&opts);
-        return 1;
-    }
-
     t_result results[MAX_PORTS];
     int      failed = 0;
 

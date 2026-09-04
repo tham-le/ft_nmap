@@ -66,13 +66,6 @@ typedef struct s_thread_arg {
     int                 thread_id;
 } t_thread_arg;
 
-/* how to decide whether we may use raw sockets, like nmap's o.isr00t */
-typedef enum e_priv_mode {
-    PRIV_AUTO = 0,  /* look at the effective uid */
-    PRIV_FORCE_ON,  /* --privileged */
-    PRIV_FORCE_OFF, /* --unprivileged */
-} t_priv_mode;
-
 typedef struct s_options {
     char        *ips[MAX_IPS];
     int          ip_count;
@@ -80,7 +73,6 @@ typedef struct s_options {
     int          port_count;
     int          scan_flags;
     int          speedup;
-    t_priv_mode  priv_mode;
 } t_options;
 
 /* args.c */

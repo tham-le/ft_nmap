@@ -123,10 +123,6 @@ void parse_arguments(int argc, char **argv, t_options *opts) {
             parse_ports(argv[++i], opts);
         } else if (strcmp(argv[i], "--scan") == 0 && i + 1 < argc) {
             parse_scan_types(argv[++i], opts);
-        } else if (strcmp(argv[i], "--privileged") == 0) {
-            opts->priv_mode = PRIV_FORCE_ON;
-        } else if (strcmp(argv[i], "--unprivileged") == 0) {
-            opts->priv_mode = PRIV_FORCE_OFF;
         } else if (strcmp(argv[i], "--speedup") == 0 && i + 1 < argc) {
             if (parse_uint(argv[++i], &opts->speedup) < 0
                     || opts->speedup > MAX_SPEEDUP) {
@@ -157,23 +153,4 @@ void free_options(t_options *opts) {
     for (int i = 0; i < opts->ip_count; i++)
         free(opts->ips[i]);
     opts->ip_count = 0;
-}
-
-/*
- * Whether the raw scans are allowed to run, the same way nmap decides it:
- * the effective uid, with an explicit flag or environment variable able to
- * override the guess. The kernel really tests CAP_NET_RAW, which a uid check
- * cannot see, so a binary given the capability with setcap needs
- * --privileged to say so.
- */
-int have_raw_privilege(const t_options *opts) {
-    if (opts->priv_mode == PRIV_FORCE_ON)
-        return 1;
-    if (opts->priv_mode == PRIV_FORCE_OFF)
-        return 0;
-    if (getenv("FT_NMAP_PRIVILEGED"))
-        return 1;
-    if (getenv("FT_NMAP_UNPRIVILEGED"))
-        return 0;
-    return geteuid() == 0;
 }

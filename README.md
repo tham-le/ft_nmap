@@ -194,17 +194,3 @@ Of the 726 ports nmap names in 1 to 1024, ft_nmap now names 684. The rest differ
 ```bash
 ./ft_nmap --ip scanme.nmap.org --port 1-1024 --speedup 50 --scan SYN
 ```
-
-## Notes
-
-Concepts used in this project:
-
-- [Port Scanning](https://notes.thamle.live/Networking/Port-Scanning)
-- [Raw Sockets](https://notes.thamle.live/Networking/Raw-Sockets)
-- [PCAP](https://notes.thamle.live/Networking/PCAP)
-- [TCP](https://notes.thamle.live/Networking/TCP) and [TCP Header](https://notes.thamle.live/Networking/TCP-Header)
-- [UDP](https://notes.thamle.live/Networking/UDP)
-- [ICMP](https://notes.thamle.live/Networking/ICMP)
-- [IP](https://notes.thamle.live/Networking/IP)
-- [Traceroute](https://notes.thamle.live/Networking/Traceroute)
-- [getaddrinfo](https://notes.thamle.live/Syscalls/getaddrinfo)

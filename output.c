@@ -1,6 +1,8 @@
 #include "ft_nmap.h"
 #include <netdb.h>
 
+#define COL_FMT "%-6s %-22s %-40s %s\n"
+
 static const char *state_str(t_state s) {
     switch (s) {
     case STATE_OPEN:          return "Open";
@@ -12,121 +14,69 @@ static const char *state_str(t_state s) {
     }
 }
 
-/*
- * Open wins, then Closed, then Unfiltered, then Filtered.
- * This mirrors nmap's conclusion logic across multiple scan types.
- */
-static t_state get_conclusion(const t_result *res, int scan_flags) {
-    for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_OPEN)
-            return STATE_OPEN;
-    for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_CLOSED)
-            return STATE_CLOSED;
-    for (int i = 0; i < SCAN_COUNT; i++)
-        if ((scan_flags & g_scan_types[i].bit) && res->states[i] == STATE_UNFILTERED)
-            return STATE_UNFILTERED;
+/* Open wins, then Closed, then Unfiltered, then Filtered */
+static t_state conclusion(const t_result *res, t_scan scan_flags) {
+    static const t_state order[] = { STATE_OPEN, STATE_CLOSED, STATE_UNFILTERED };
+    for (size_t k = 0; k < sizeof(order) / sizeof(order[0]); k++)
+        for (int i = 0; i < SCAN_COUNT; i++)
+            if ((scan_flags & g_scan_types[i].bit) && res->states[i] == order[k])
+                return order[k];
     return STATE_FILTERED;
 }
 
-static void lookup_service(t_result *res, int scan_flags) {
-    int         is_udp = (scan_flags & ~SCAN_UDP) ? 0 : 1;
-    const char *proto  = is_udp ? "udp" : "tcp";
-    const char *name   = NULL;
-
-    struct servent *se = getservbyport(htons(res->port), proto);
-    if (se)
-        name = se->s_name;
-    else
-        /* /etc/services is incomplete on most distributions */
-        name = service_name_fallback(res->port, is_udp);
-
-    strncpy(res->service, name ? name : "Unassigned",
-            sizeof(res->service) - 1);
-    res->service[sizeof(res->service) - 1] = '\0';
+static const char *service_name(uint16_t port, t_scan scan_flags) {
+    const char     *proto = (scan_flags & SCAN_TCP) ? "tcp" : "udp";
+    struct servent *se    = getservbyport(htons(port), proto);
+    return se ? se->s_name : "Unassigned";
 }
 
-static void build_results_str(const t_result *res, int scan_flags,
-                               char *buf, size_t size) {
-    buf[0] = '\0';
+static void print_port_line(const t_result *res, t_scan scan_flags) {
+    char port[8], results[256] = "";
     for (int i = 0; i < SCAN_COUNT; i++) {
         if (!(scan_flags & g_scan_types[i].bit))
             continue;
-        char tmp[64];
-        snprintf(tmp, sizeof(tmp), "%s(%s) ",
-                 g_scan_types[i].name, state_str(res->states[i]));
-        strncat(buf, tmp, size - strlen(buf) - 1);
+        size_t len = strlen(results);
+        snprintf(results + len, sizeof(results) - len, "%s%s(%s)",
+                 len ? " " : "", g_scan_types[i].name, state_str(res->states[i]));
     }
-    size_t len = strlen(buf);
-    if (len > 0 && buf[len - 1] == ' ')
-        buf[len - 1] = '\0';
+    snprintf(port, sizeof(port), "%u", res->port);
+    printf(COL_FMT, port, service_name(res->port, scan_flags), results,
+           state_str(conclusion(res, scan_flags)));
 }
 
-void print_scan_header(t_options *opts, const char *ip) {
-    char scans[128] = "";
-    for (int i = 0; i < SCAN_COUNT; i++) {
-        if (opts->scan_flags & g_scan_types[i].bit) {
-            if (scans[0])
-                strncat(scans, " ", sizeof(scans) - strlen(scans) - 1);
-            strncat(scans, g_scan_types[i].name, sizeof(scans) - strlen(scans) - 1);
+static void print_section(const char *title, const t_result *results, int count,
+                          t_scan scan_flags, int want_open) {
+    int shown = 0;
+    for (int i = 0; i < count; i++) {
+        if ((conclusion(&results[i], scan_flags) == STATE_OPEN) != want_open)
+            continue;
+        if (!shown++) {
+            printf("\n%s:\n" COL_FMT, title, "Port", "Service", "Results", "Conclusion");
+            printf("--------------------------------------------------------"
+                   "--------------------------------------------------------\n");
         }
+        print_port_line(&results[i], scan_flags);
     }
+}
+
+void print_scan_header(const t_options *opts, const char *ip) {
     printf("\nScan Configurations\n");
-    printf("Target IP           : %s\n", ip);
-    printf("Ports to scan       : %d\n", opts->port_count);
-    printf("Scans               : %s\n", scans);
-    printf("Threads             : %d\n", opts->speedup);
+    printf("Target Ip-Address     : %s\n", ip);
+    printf("No of Ports to scan   : %d\n", opts->port_count);
+    printf("Scans to be performed :");
+    for (int i = 0; i < SCAN_COUNT; i++)
+        if (opts->scan_flags & g_scan_types[i].bit)
+            printf(" %s", g_scan_types[i].name);
+    printf("\nNo of threads         : %d\n", opts->speedup);
     printf("\nScanning..\n");
     fflush(stdout);
 }
 
-static void print_port_line(t_result *res, int scan_flags, t_state conclusion) {
-    char results_str[256];
-    build_results_str(res, scan_flags, results_str, sizeof(results_str));
-    printf("%-6u %-22s %-40s %s\n",
-           res->port, res->service, results_str, state_str(conclusion));
-}
-
-void print_results(t_result *results, int count, const char *ip,
-                   int scan_flags, double elapsed) {
-    t_state conclusions[MAX_PORTS];
-    for (int i = 0; i < count; i++) {
-        lookup_service(&results[i], scan_flags);
-        conclusions[i] = get_conclusion(&results[i], scan_flags);
-    }
-
+void print_results(const t_result *results, int count, const char *ip,
+                   t_scan scan_flags, double elapsed) {
     printf("\nScan took %.5f secs\n", elapsed);
     printf("IP address: %s\n", ip);
-
-    const char *sep = "------------------------------------------------------------"
-                      "----------------------------------------------------";
-
-    int has_open = 0;
-    for (int i = 0; i < count; i++)
-        if (conclusions[i] == STATE_OPEN) { has_open = 1; break; }
-
-    if (has_open) {
-        printf("\nOpen ports:\n");
-        printf("%-6s %-22s %-40s %s\n",
-               "Port", "Service", "Results", "Conclusion");
-        printf("%s\n", sep);
-        for (int i = 0; i < count; i++)
-            if (conclusions[i] == STATE_OPEN)
-                print_port_line(&results[i], scan_flags, conclusions[i]);
-    }
-
-    int has_other = 0;
-    for (int i = 0; i < count; i++)
-        if (conclusions[i] != STATE_OPEN) { has_other = 1; break; }
-
-    if (has_other) {
-        printf("\nClosed/Filtered/Unfiltered ports:\n");
-        printf("%-6s %-22s %-40s %s\n",
-               "Port", "Service", "Results", "Conclusion");
-        printf("%s\n", sep);
-        for (int i = 0; i < count; i++)
-            if (conclusions[i] != STATE_OPEN)
-                print_port_line(&results[i], scan_flags, conclusions[i]);
-    }
+    print_section("Open ports", results, count, scan_flags, 1);
+    print_section("Closed/Filtered/Unfiltered ports", results, count, scan_flags, 0);
     printf("\n");
 }

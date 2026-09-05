@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <signal.h>
+#include <time.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -15,23 +17,22 @@
 #define MAX_PORTS    1024
 #define MAX_SPEEDUP  250
 
-/* highest port covered by the built-in service name table */
-#define SERVICE_MAX_PORT 1024
-
-#define SCAN_SYN   (1 << 0)
-#define SCAN_NULL  (1 << 1)
-#define SCAN_ACK   (1 << 2)
-#define SCAN_FIN   (1 << 3)
-#define SCAN_XMAS  (1 << 4)
-#define SCAN_UDP   (1 << 5)
-#define SCAN_ALL   0x3F
-/* the scans that need a raw socket to send and pcap to receive */
-#define SCAN_RAW_TCP (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_FIN | SCAN_XMAS)
 #define SCAN_COUNT 6
 
-#define SRC_PORT_BASE 40000
-#define SCAN_TIMEOUT_MS  500   /* ms to wait for a TCP reply */
-#define UDP_TIMEOUT_MS   1500  /* ms to wait for ICMP unreachable */
+typedef enum e_scan {
+    SCAN_SYN  = 1 << 0,
+    SCAN_NULL = 1 << 1,
+    SCAN_ACK  = 1 << 2,
+    SCAN_FIN  = 1 << 3,
+    SCAN_XMAS = 1 << 4,
+    SCAN_UDP  = 1 << 5,
+    SCAN_ALL  = (1 << SCAN_COUNT) - 1,
+    SCAN_TCP  = SCAN_ALL & ~SCAN_UDP,
+} t_scan;
+
+#define SRC_PORT_BASE   40000
+#define TCP_TIMEOUT_MS  500
+#define UDP_TIMEOUT_MS  1500
 
 typedef enum e_state {
     STATE_UNKNOWN = 0,
@@ -43,72 +44,64 @@ typedef enum e_state {
 } t_state;
 
 typedef struct s_scan_type {
-    int         bit;
+    t_scan      bit;
     uint8_t     tcp_flags;
     const char *name;
 } t_scan_type;
 
 extern const t_scan_type g_scan_types[SCAN_COUNT];
 
+/* set by SIGINT and SIGTERM, every wait loop checks it */
+extern volatile sig_atomic_t g_stop;
+
 typedef struct s_result {
     uint16_t port;
     t_state  states[SCAN_COUNT];
-    char     service[64];
 } t_result;
 
-typedef struct s_thread_arg {
-    struct sockaddr_in  dest;
-    char                dest_ip[INET_ADDRSTRLEN];
-    uint16_t           *ports;
-    int                 port_count;
-    int                 scan_flags;
-    t_result           *results;
-    int                 thread_id;
-} t_thread_arg;
-
 typedef struct s_options {
-    char        *ips[MAX_IPS];
-    int          ip_count;
-    uint16_t     ports[MAX_PORTS];
-    int          port_count;
-    int          scan_flags;
-    int          speedup;
+    char     *ips[MAX_IPS];
+    int       ip_count;
+    uint16_t  ports[MAX_PORTS];
+    int       port_count;
+    t_scan    scan_flags;
+    int       speedup;
 } t_options;
 
 /* args.c */
-void      parse_arguments(int argc, char **argv, t_options *opts);
+int       parse_arguments(int argc, char **argv, t_options *opts);
 void      free_options(t_options *opts);
-int       have_raw_privilege(const t_options *opts);
 
 /* utils.c */
-uint16_t  checksum(const void *data, size_t len);
 int       resolve_target(const char *host, struct sockaddr_in *out);
-uint32_t  get_local_ip(struct sockaddr_in *dest);
+void      deadline_after(struct timespec *deadline, int ms);
+int       wait_fd(int fd, const struct timespec *deadline);
 
-/* pcap_utils.c */
-pcap_t   *open_pcap(const char *dest_ip, uint32_t local_ip,
-                    uint16_t sp_min, uint16_t sp_max);
+/* tcp.c: one raw socket and one pcap handle per thread */
+typedef struct s_probe {
+    int          thread_id;
+    int          raw_sock;
+    uint32_t     src_ip;
+    pcap_t      *pcap;
+    unsigned int seed;
+} t_probe;
 
-/* tcp.c */
-t_state   tcp_scan(struct sockaddr_in *dest, uint16_t port,
-                   uint16_t src_port, uint32_t src_ip,
-                   uint8_t tcp_flags, int scan_bit,
-                   int raw_sock, pcap_t *pcap, unsigned int *seed);
+int       probe_open(t_probe *p, int thread_id, const struct sockaddr_in *dest,
+                     const char *dest_ip);
+void      probe_close(t_probe *p);
+t_state   tcp_scan(t_probe *p, const struct sockaddr_in *dest, uint16_t port,
+                   int scan_idx);
 
 /* udp.c */
-t_state   udp_scan(struct sockaddr_in *dest, uint16_t port);
+t_state   udp_scan(const struct sockaddr_in *dest, uint16_t port);
 
 /* scan.c */
-/* returns 0 if every worker ran, -1 if any of them could not start */
-int       run_scan(t_options *opts, struct sockaddr_in *dest,
+int       run_scan(const t_options *opts, const struct sockaddr_in *dest,
                    const char *dest_ip, t_result *results);
 
-/* services.c */
-const char *service_name_fallback(uint16_t port, int is_udp);
-
 /* output.c */
-void      print_scan_header(t_options *opts, const char *ip);
-void      print_results(t_result *results, int count, const char *ip,
-                        int scan_flags, double elapsed);
+void      print_scan_header(const t_options *opts, const char *ip);
+void      print_results(const t_result *results, int count, const char *ip,
+                        t_scan scan_flags, double elapsed);
 
 #endif
